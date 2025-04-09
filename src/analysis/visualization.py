@@ -1,264 +1,256 @@
 """
 Platform Strategy Visualization Module
 
-包含实验结果的可视化函数，支持时间序列对比、敏感性分析、分布可视化等。
+Academic-grade visualization functions for experimental results.
 """
 
 import logging
-from typing import Dict, List, Tuple
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
 import seaborn as sns
-from scipy import stats
+from typing import Dict, List, Optional, Tuple
+from pathlib import Path
 
-# 配置全局绘图样式
-plt.style.use('seaborn')
-sns.set_palette("husl")
-plt.rcParams['font.family'] = 'DejaVu Sans'
-plt.rcParams['figure.dpi'] = 150
-plt.rcParams['savefig.bbox'] = 'tight'
+# 类型别名定义
+MetricsArray = Dict[str, np.ndarray]
+StrategyData = Dict[str, Dict[str, List[np.ndarray]]]
 
 
-def plot_time_series_comparison(
-        gmv_avg: Dict[str, np.ndarray],
-        sw_avg: Dict[str, np.ndarray],
-        save_path: str = None
+# 全局样式配置
+def configure_style():
+    """配置学术图表样式"""
+    plt.style.use('seaborn-paper')
+    sns.set_palette("colorblind")
+    plt.rcParams.update({
+        'font.family': 'serif',
+        'font.serif': 'Times New Roman',
+        'figure.dpi': 300,
+        'savefig.bbox': 'tight',
+        'axes.labelsize': 12,
+        'axes.titlesize': 14,
+        'legend.fontsize': 10,
+        'xtick.labelsize': 10,
+        'ytick.labelsize': 10,
+        'figure.figsize': (8, 6)
+    })
+
+
+configure_style()
+
+
+def _save_figure(save_path: Optional[str], filename: str) -> None:
+    """统一保存图表"""
+    if save_path:
+        Path(save_path).mkdir(parents=True, exist_ok=True)
+        full_path = Path(save_path) / filename
+        plt.savefig(full_path, dpi=300)
+        plt.close()
+        logging.info(f"Saved figure: {full_path}")
+
+
+def plot_strategy_comparison(
+        data: Dict[str, MetricsArray],
+        metrics: List[str] = ['gmv', 'sw', 'active_restaurants', 'active_workers'],
+        save_path: Optional[str] = None
 ) -> None:
     """
-    绘制时间序列对比图（GMV vs SW策略）
+    多指标策略对比时序图
 
-    参数:
-        gmv_avg (dict): GMV策略的聚合指标数据
-        sw_avg (dict): SW策略的聚合指标数据
-        save_path (str): 图片保存路径（可选）
+    Parameters:
+        data: 包含各策略平均指标数据的字典
+        metrics: 需要展示的指标列表
+        save_path: 图片保存路径
     """
-    metrics = ['gmv', 'sw', 'reputation', 'active_restaurants',
-               'active_workers', 'avg_restaurant_utility',
-               'avg_consumer_utility', 'avg_worker_utility']
+    n_metrics = len(metrics)
+    n_cols = 2
+    n_rows = (n_metrics + 1) // n_cols
 
-    fig, axes = plt.subplots(4, 2, figsize=(15, 20))
-    fig.suptitle('Time Series Comparison: GMV vs SW Strategy Metrics', fontsize=16)
+    fig, axes = plt.subplots(n_rows, n_cols, figsize=(12, 3 * n_rows))
+    fig.suptitle("Multi-Strategy Metric Comparison", y=1.02)
 
-    for i, metric in enumerate(metrics):
-        row, col = i // 2, i % 2
-        ax = axes[row, col]
+    for idx, metric in enumerate(metrics):
+        row = idx // n_cols
+        col = idx % n_cols
+        ax = axes[row, col] if n_rows > 1 else axes[col]
 
-        if metric in gmv_avg and metric in sw_avg:
-            ax.plot(gmv_avg[metric], label='GMV Strategy', lw=2, alpha=0.8)
-            ax.plot(sw_avg[metric], label='SW Strategy', lw=2, alpha=0.8)
-            ax.set_title(metric.upper(), fontsize=10)
-            ax.grid(True, linestyle='--', alpha=0.7)
-            ax.legend()
-        else:
-            ax.set_visible(False)
+        for strategy, values in data.items():
+            if metric in values:
+                ax.plot(values[metric], label=strategy, lw=1.5)
+
+        ax.set_title(metric.upper())
+        ax.set_xlabel("Simulation Period")
+        ax.grid(True, alpha=0.3)
+
+        if idx == 0:
+            ax.legend(loc='upper right')
 
     plt.tight_layout()
-    if save_path:
-        plt.savefig(f"{save_path}/time_series_comparison.png")
-    plt.close()
-
-
-def plot_box_distribution(
-        data_dict: Dict[str, List[float]],
-        title: str,
-        save_path: str = None
-) -> None:
-    """
-    绘制多策略箱线图
-
-    参数:
-        data_dict (dict): 形如 {'Strategy1_GMV': [values], ...}
-        title (str): 图表标题
-        save_path (str): 图片保存路径（可选）
-    """
-    plt.figure(figsize=(10, 6))
-    df = pd.DataFrame(data_dict)
-
-    sns.boxplot(data=df, orient="h", palette="Set2")
-    plt.title(title, fontsize=12)
-    plt.xlabel("Value", fontsize=10)
-    plt.grid(True, axis='x', linestyle='--', alpha=0.6)
-
-    if save_path:
-        plt.savefig(f"{save_path}/boxplot_{title.lower().replace(' ', '_')}.png")
-    plt.close()
+    _save_figure(save_path, "strategy_comparison.png")
 
 
 def plot_sensitivity_analysis(
         df: pd.DataFrame,
         param_name: str,
-        save_path: str = None
+        metrics: List[str] = ['GMV', 'SW'],
+        save_path: Optional[str] = None
 ) -> None:
     """
-    绘制敏感性分析误差条图
+    增强型敏感性分析图
 
-    参数:
-        df (DataFrame): 敏感性分析结果数据框
-        param_name (str): 被分析的参数名称
-        save_path (str): 图片保存路径（可选）
-    """
-    fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(14, 6))
-
-    # GMV 子图
-    ax1.errorbar(df[param_name], df['Final_GMV_Mean'],
-                 yerr=[df['Final_GMV_Mean'] - df['Final_GMV_95CI'].apply(lambda x: x[0]),
-                       df['Final_GMV_95CI'].apply(lambda x: x[1]) - df['Final_GMV_Mean']],
-                 fmt='o-', capsize=5, color='#2ca02c')
-    ax1.set_xlabel(param_name, fontsize=10)
-    ax1.set_ylabel("Final GMV", fontsize=10)
-    ax1.set_title("Sensitivity of GMV to {}".format(param_name), fontsize=12)
-    ax1.grid(True, linestyle='--', alpha=0.6)
-
-    # SW 子图
-    ax2.errorbar(df[param_name], df['Final_SW_Mean'],
-                 yerr=[df['Final_SW_Mean'] - df['Final_SW_95CI'].apply(lambda x: x[0]),
-                       df['Final_SW_95CI'].apply(lambda x: x[1]) - df['Final_SW_Mean']],
-                 fmt='o-', capsize=5, color='#d62728')
-    ax2.set_xlabel(param_name, fontsize=10)
-    ax2.set_ylabel("Final SW", fontsize=10)
-    ax2.set_title("Sensitivity of SW to {}".format(param_name), fontsize=12)
-    ax2.grid(True, linestyle='--', alpha=0.6)
-
-    plt.tight_layout()
-    if save_path:
-        plt.savefig(f"{save_path}/sensitivity_{param_name}.png")
-    plt.close()
-
-
-def plot_correlation_heatmap(
-        data_dict: Dict[str, List[float]],
-        title: str = "Correlation Heatmap",
-        save_path: str = None
-) -> None:
-    """
-    绘制指标相关性热力图
-
-    参数:
-        data_dict (dict): 形如 {'Metric1': [values], ...}
-        title (str): 图表标题
-        save_path (str): 图片保存路径（可选）
-    """
-    df = pd.DataFrame(data_dict)
-    corr = df.corr()
-
-    plt.figure(figsize=(10, 8))
-    sns.heatmap(corr, annot=True, fmt=".2f", cmap="coolwarm",
-                cbar_kws={'label': 'Correlation Coefficient'},
-                square=True)
-    plt.title(title, fontsize=14)
-
-    if save_path:
-        plt.savefig(f"{save_path}/correlation_heatmap.png")
-    plt.close()
-
-
-def plot_state_evolution(
-        metrics: Dict[str, np.ndarray],
-        save_path: str = None
-) -> None:
-    """
-    绘制平台状态变量演化图
-
-    参数:
-        metrics (dict): 包含平台状态指标的数据字典
-        save_path (str): 图片保存路径（可选）
+    Parameters:
+        df: 包含敏感性分析结果的数据框
+        param_name: 分析的参数名称
+        metrics: 需要展示的指标列表
+        save_path: 图片保存路径
     """
     plt.figure(figsize=(10, 6))
 
-    if 'reputation' in metrics:
-        plt.plot(metrics['reputation'], label="Reputation", marker='o', markersize=4)
-    if 'active_restaurants' in metrics:
-        plt.plot(metrics['active_restaurants'], label="Active Restaurants", marker='s', markersize=4)
-    if 'active_workers' in metrics:
-        plt.plot(metrics['active_workers'], label="Active Workers", marker='^', markersize=4)
+    colors = sns.color_palette("husl", len(metrics))
+    markers = ['o', 's', '^', 'D']
 
-    plt.xlabel("Simulation Period", fontsize=10)
-    plt.ylabel("Value", fontsize=10)
-    plt.title("Evolution of Platform State Variables", fontsize=12)
+    for idx, metric in enumerate(metrics):
+        mean_col = f'{metric}_mean'
+        ci_col = f'{metric}_ci'
+
+        plt.errorbar(
+            df[param_name],
+            df[mean_col],
+            yerr=[df[mean_col] - df[ci_col].str[0],
+                  df[ci_col].str[1] - df[mean_col]],
+            fmt=markers[idx],
+            color=colors[idx],
+            label=metric,
+            capsize=5,
+            markersize=8,
+            elinewidth=1.5
+        )
+
+    plt.xlabel(param_name.replace('_', ' ').title(), fontsize=12)
+    plt.ylabel("Metric Value", fontsize=12)
+    plt.title(f"Sensitivity Analysis: {param_name.title()}", fontsize=14)
     plt.legend()
-    plt.grid(True, linestyle='--', alpha=0.6)
-
-    if save_path:
-        plt.savefig(f"{save_path}/state_evolution.png")
-    plt.close()
-
-
-def plot_strategy_scatter(
-        strategies_data: Dict[str, Dict[str, List[np.ndarray]]],
-        save_path: str = None
-) -> None:
-    """
-    绘制策略散点图（GMV vs SW）
-
-    参数:
-        strategies_data (dict): 各策略的实验结果数据
-        save_path (str): 图片保存路径（可选）
-    """
-    plt.figure(figsize=(8, 6))
-
-    for strategy, data in strategies_data.items():
-        if 'gmv' in data and 'sw' in data:
-            x = [arr[-1] for arr in data['gmv']]
-            y = [arr[-1] for arr in data['sw']]
-            plt.scatter(x, y, label=strategy, alpha=0.7, s=80)
-
-    plt.xlabel("Final GMV", fontsize=10)
-    plt.ylabel("Final SW", fontsize=10)
-    plt.title("Final GMV vs SW by Strategy", fontsize=12)
-    plt.legend()
-    plt.grid(True, linestyle='--', alpha=0.6)
-
-    if save_path:
-        plt.savefig(f"{save_path}/strategy_scatter.png")
-    plt.close()
-
-
-# 可视化专用函数
-def plot_histogram_kde(data: List[float], title: str):
-    """
-    直方图/KDE 分布图：
-    分析关键指标（例如 GMV 或 SW）的分布情况，
-    判断数据是否呈正态分布或存在偏态，为解释置信区间较大提供依据。
-    """
-    plt.figure(figsize=(10, 6))
-    sns.histplot(data, kde=True, bins=30, color='#4c72b0')
-    plt.title(f"Distribution of {title}", fontsize=14)
-    plt.xlabel("Value", fontsize=12)
     plt.grid(True, alpha=0.3)
-    plt.show()
+    _save_figure(save_path, f"sensitivity_{param_name}.png")
 
 
-def plot_strategy_scatter(strategies_results: Dict[str, Dict[str, List[np.ndarray]]]):
+def plot_correlation_matrix(
+        data: pd.DataFrame,
+        method: str = 'pearson',
+        save_path: Optional[str] = None
+) -> None:
     """
-    散点图：
-    绘制各策略下最终 GMV 与 SW 之间的散点图，
-    用于直观展示两者之间的相关性。
+    增强型相关性矩阵
+
+    Parameters:
+        data: 包含指标数据的DataFrame
+        method: 相关性计算方法 ('pearson'|'spearman')
+        save_path: 图片保存路径
     """
+    corr = data.corr(method=method)
+    mask = np.triu(np.ones_like(corr, dtype=bool))
+
     plt.figure(figsize=(10, 8))
-    colors = sns.color_palette("husl", len(strategies_results))
-
-    for (strategy, metrics), color in zip(strategies_results.items(), colors):
-        final_gmv = [run[-1] for run in metrics['gmv']]
-        final_sw = [run[-1] for run in metrics['sw']]
-
-        plt.scatter(final_gmv, final_sw,
-                    label=strategy,
-                    color=color,
-                    s=100,
-                    alpha=0.7,
-                    edgecolor='w')
-
-    plt.xlabel("Final GMV", fontsize=12)
-    plt.ylabel("Final SW", fontsize=12)
-    plt.title("GMV vs Social Welfare Trade-off", fontsize=14)
-    plt.legend(title="Strategy", fontsize=10)
-    plt.grid(True, linestyle='--', alpha=0.5)
-    plt.tight_layout()
-    plt.show()
+    sns.heatmap(
+        corr,
+        mask=mask,
+        annot=True,
+        fmt=".2f",
+        cmap="coolwarm",
+        center=0,
+        square=True,
+        cbar_kws={"shrink": 0.8}
+    )
+    plt.title(f"{method.title()} Correlation Matrix", fontsize=14)
+    _save_figure(save_path, "correlation_matrix.png")
 
 
-def _save_figure(save_path: str, filename: str):
-    if save_path:
-        plt.savefig(f"{save_path}/{filename}")
-        logging.info(f"Saved plot: {filename}")
+def plot_distribution_comparison(
+        data_dict: Dict[str, List[float]],
+        metric_name: str,
+        save_path: Optional[str] = None
+) -> None:
+    """
+    分布对比图（箱线图+小提琴图）
+
+    Parameters:
+        data_dict: 各策略的指标数据字典
+        metric_name: 指标名称
+        save_path: 图片保存路径
+    """
+    df = pd.DataFrame([
+        {"Strategy": k, "Value": v}
+        for k, values in data_dict.items()
+        for v in values
+    ])
+
+    plt.figure(figsize=(10, 6))
+
+    # 绘制箱线图
+    sns.boxplot(
+        x="Strategy",
+        y="Value",
+        data=df,
+        width=0.3,
+        fliersize=3,
+        linewidth=1
+    )
+
+    # 叠加小提琴图
+    sns.violinplot(
+        x="Strategy",
+        y="Value",
+        data=df,
+        inner=None,
+        alpha=0.3
+    )
+
+    plt.title(f"Distribution Comparison: {metric_name}", fontsize=14)
+    plt.xlabel("")
+    plt.ylabel(metric_name.upper(), fontsize=12)
+    plt.grid(True, axis='y', alpha=0.3)
+    _save_figure(save_path, f"distribution_{metric_name}.png")
+
+
+def plot_scatter_matrix(
+        strategies_data: StrategyData,
+        metrics: List[str] = ['gmv', 'sw'],
+        save_path: Optional[str] = None
+) -> None:
+    """
+    策略散点矩阵图
+
+    Parameters:
+        strategies_data: 各策略的实验数据
+        metrics: 需要展示的指标列表
+        save_path: 图片保存路径
+    """
+    final_data = []
+    for strategy, data in strategies_data.items():
+        for metric in metrics:
+            if metric in data:
+                final_values = [run[-1] for run in data[metric]]
+                for val in final_values:
+                    final_data.append({
+                        'Strategy': strategy,
+                        'Metric': metric.upper(),
+                        'Value': val
+                    })
+
+    df = pd.DataFrame(final_data)
+    g = sns.FacetGrid(
+        df,
+        col="Metric",
+        hue="Strategy",
+        height=5,
+        aspect=1.2,
+        sharey=False
+    )
+    g.map(sns.scatterplot, "Strategy", "Value", alpha=0.7)
+    g.add_legend(title="Strategy")
+
+    for ax in g.axes.flat:
+        ax.grid(True, alpha=0.3)
+        ax.set_title(ax.get_title(), fontsize=12)
+
+    _save_figure(save_path, "scatter_matrix.png")
