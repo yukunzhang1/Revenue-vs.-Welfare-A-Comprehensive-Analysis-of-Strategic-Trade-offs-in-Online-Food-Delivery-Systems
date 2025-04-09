@@ -124,5 +124,19 @@ python src/analysis/sensitivity.py \
 
 ---
 
+# How to Cite
+```bibtex
+@misc{zhang2025revenuevswelfarecomprehensive,
+      title={Revenue vs. Welfare: A Comprehensive Analysis of Strategic Trade-offs in Online Food Delivery Systems}, 
+      author={Yukun Zhang and Qi Dong},
+      year={2025},
+      eprint={2410.16566},
+      archivePrefix={arXiv},
+      primaryClass={cs.GT},
+      url={https://arxiv.org/abs/2410.16566}, 
+}
+```
+
+
 
 
