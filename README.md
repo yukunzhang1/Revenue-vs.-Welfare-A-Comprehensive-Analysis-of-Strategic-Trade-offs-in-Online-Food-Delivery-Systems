@@ -2,7 +2,7 @@
 **Multi-Agent Dynamic Market Simulation Framework** for analyzing long-term impacts of GMV/SW/Hybrid strategies on platform ecosystems
 
 ![Framework Diagram](docs/framework.png)
-
+![Framework Diagram](docs/model.png)
 ---
 
 ## Core Contributions
