@@ -3,7 +3,9 @@ import random
 from typing import List
 
 import numpy as np
-from .config import CONFIG  # 导入配置
+
+from .market_condition import MarketCondition
+from ..simulation.config import CONFIG  # 导入配置
 
 @dataclass
 class Restaurant:
