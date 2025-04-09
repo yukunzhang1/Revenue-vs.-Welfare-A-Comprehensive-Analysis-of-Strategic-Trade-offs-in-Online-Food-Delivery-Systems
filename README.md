@@ -85,7 +85,6 @@ exit_thresholds:     # Participant exit rules
 *Data based on 50 independent simulation runs with 500 periods each.*
 
 ### Sensitivity Analysis
-#### Commission Rate Impact
 ```python
 # Run sensitivity analysis
 python src/analysis/sensitivity.py \
