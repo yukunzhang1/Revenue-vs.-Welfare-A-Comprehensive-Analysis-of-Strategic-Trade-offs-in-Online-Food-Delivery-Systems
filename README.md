@@ -1,4 +1,4 @@
-# Revenue-vs.-Welfare-A-Comprehensive-Analysis-of-Strategic-Trade-offs-in-Online-Food-Delivery-Systems
+# Revenue-vs.-Welfare-A-Comprehensive-Analysis-of-Strategic-Trade-offs-in-Online-Food-Delivery-Systems [Paper Link](https://arxiv.org/abs/2410.16566)
 **Multi-Agent Dynamic Market Simulation Framework** for analyzing long-term impacts of GMV/SW/Hybrid strategies on platform ecosystems
 
 ![Framework Diagram](docs/framework.png)
